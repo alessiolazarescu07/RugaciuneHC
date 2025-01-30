@@ -11,8 +11,8 @@ $partecipanti = json_decode(file_get_contents($json_file), true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome'])) {
     $nome = trim($_POST['nome']);
-    if (!empty($nome) && !in_array($nome, $partecipanti)) {
-        $partecipanti[] = $nome;
+    if (!empty($nome) && !isset($partecipanti[$nome])) {
+        $partecipanti[$nome] = 0; 
         file_put_contents($json_file, json_encode($partecipanti));
         $_SESSION['nome'] = $nome;
     }
@@ -20,19 +20,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome'])) {
 
 $pescabile = false;
 $ora_corrente = date('H:i');
-if ($ora_corrente >= '22:00' && $ora_corrente <= '23:30') {
+if ($ora_corrente >= '16:00:00' && $ora_corrente <= '23:30') {
     $pescabile = true;
 }
 
 $persona_assegnata = isset($_SESSION['assegnato']) ? $_SESSION['assegnato'] : '';
 
 if (isset($_POST['pesca']) && $pescabile && isset($_SESSION['nome']) && empty($persona_assegnata)) {
-    $disponibili = array_diff($partecipanti, [$_SESSION['nome']]);
+    $disponibili = array_keys(array_filter($partecipanti, function($val) {
+        return $val === 0;
+    }));
+    
+    if (empty($disponibili)) {
+        foreach ($partecipanti as $key => $val) {
+            $partecipanti[$key] = 0;
+        }
+        file_put_contents($json_file, json_encode($partecipanti));
+        $disponibili = array_keys($partecipanti);
+    }
+
+    $disponibili = array_diff($disponibili, [$_SESSION['nome']]);
+
     if (!empty($disponibili)) {
         shuffle($disponibili);
         $persona_assegnata = array_pop($disponibili);
         $_SESSION['assegnato'] = $persona_assegnata;
-        setcookie("assegnato", $persona_assegnata, time() + (86400 * 30), "/"); // Salva nei cookie per 30 giorni
+        setcookie("assegnato", $persona_assegnata, time() + (86400 * 30), "/");
+        
+        $partecipanti[$persona_assegnata] = 1;
+        file_put_contents($json_file, json_encode($partecipanti));
     }
 } elseif (isset($_COOKIE['assegnato']) && empty($persona_assegnata)) {
     $persona_assegnata = $_COOKIE['assegnato'];

@@ -4,7 +4,6 @@ session_start();
 $json_file = 'partecipanti.json';
 $preghiere_file = 'preghiere.json';
 
-// Creazione file JSON se non esistono
 if (!file_exists($json_file)) {
     file_put_contents($json_file, json_encode([]));
 }
@@ -15,61 +14,65 @@ if (!file_exists($preghiere_file)) {
 $partecipanti = json_decode(file_get_contents($json_file), true);
 $preghiere = json_decode(file_get_contents($preghiere_file), true);
 
-function svuotaFile($file) {
-    file_put_contents($file, json_encode([]));
-}
 date_default_timezone_set('Europe/Rome');
-// Controlla se è sabato alle 22:39
-$ora_corrente = date('D H:i'); // Ottieni il giorno della settimana e l'ora
+$ora_corrente = date('D H:i');
 if ($ora_corrente === 'Wed 17:00') {
-    svuotaFile($json_file);
-    svuotaFile($preghiere_file);
+    file_put_contents($json_file, json_encode([]));
+    file_put_contents($preghiere_file, json_encode([]));
 }
 
-// Se la lista partecipanti è vuota, permette di reinserire il nome
 if (empty($partecipanti)) {
-    setcookie('nome', '', time() - 3600, "/"); // Cancella il cookie
+    setcookie('nome', '', time() - 3600, "/");
+    setcookie('telefono', '', time() - 3600, "/");
     $nome = '';
+    $telefono = '';
 } else {
-    $nome = isset($_COOKIE['nome']) ? $_COOKIE['nome'] : ''; // Evita errore se il cookie non è impostato
+    $nome = isset($_COOKIE['nome']) ? $_COOKIE['nome'] : ''; 
+    $telefono = isset($_COOKIE['telefono']) ? $_COOKIE['telefono'] : ''; 
 }
 
-// Inserimento nome
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome'])) {
+function formatTelefono($telefono) {
+    $telefono = preg_replace('/\D/', '', $telefono); // Rimuove tutto tranne i numeri
+    
+    if (strpos($telefono, '39') === 0 || strpos($telefono, '40') === 0) {
+        return $telefono; // Se inizia con 39 o 40, è già un prefisso corretto
+    }
+
+    return '39' . $telefono; // Se manca il prefisso, assumiamo +39
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nome'], $_POST['telefono'])) {
     $nome = trim($_POST['nome']);
-    if (!empty($nome)) {
+    $telefono = trim($_POST['telefono']);
+    if (!empty($nome) && !empty($telefono)) {
         if (isset($partecipanti[$nome])) {
-            // Nome già esistente, mostriamo un errore
             $errore = "Questo nome è già stato preso. Scegli un altro.";
         } else {
-            $partecipanti[$nome] = 0;
+            $partecipanti[$nome] = ['status' => 0, 'telefono' => $telefono];
             file_put_contents($json_file, json_encode($partecipanti));
 
             setcookie('nome', $nome, time() + (6 * 24 * 60 * 60), "/");
+            setcookie('telefono', $telefono, time() + (6 * 24 * 60 * 60), "/");
             header("Location: index.php");
             exit;
         }
     }
 }
 
-// Controllo se ha già pescato
-$persona_assegnata = $preghiere[$nome] ?? '';
+$persona_assegnata = isset($preghiere[$nome]) ? $preghiere[$nome] : '';
+$pescabile = date('H:i') >= '21:50' && date('H:i') <= '23:59';
 
-// Orario valido per pescare (tra le 16:00 e le 23:30)
-$pescabile = date('H:i') >= '22:00' && date('H:i') <= '23:30';
-
-// Se l'utente preme "Pesca" e può farlo
 if (isset($_POST['pesca']) && $pescabile && $nome && empty($persona_assegnata)) {
-    $disponibili = array_keys(array_filter($partecipanti, fn($val) => $val === 0));
-    $disponibili = array_diff($disponibili, [$nome]); // Esclude se stesso
+    $disponibili = array_keys(array_filter($partecipanti, fn($val) => $val['status'] === 0));
+    $disponibili = array_diff($disponibili, [$nome]);
 
     if (empty($disponibili)) {
         foreach ($partecipanti as $key => $val) {
-            $partecipanti[$key] = 0;
+            $partecipanti[$key]['status'] = 0;
         }
         file_put_contents($json_file, json_encode($partecipanti));
         $disponibili = array_keys($partecipanti);
-        $disponibili = array_diff($disponibili, [$nome]); // Esclude ancora se stesso
+        $disponibili = array_diff($disponibili, [$nome]);
     }
 
     if (!empty($disponibili)) {
@@ -78,7 +81,7 @@ if (isset($_POST['pesca']) && $pescabile && $nome && empty($persona_assegnata)) 
         $preghiere[$nome] = $persona_assegnata;
 
         file_put_contents($preghiere_file, json_encode($preghiere));
-        $partecipanti[$persona_assegnata] = 1;
+        $partecipanti[$persona_assegnata]['status'] = 1;
         file_put_contents($json_file, json_encode($partecipanti));
 
         header("Location: index.php");
@@ -94,7 +97,6 @@ if (isset($_POST['pesca']) && $pescabile && $nome && empty($persona_assegnata)) 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HC Rugaciune</title>
     <link rel="icon" type="image/png" href="favicon.png">
-
     <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Oswald:wght@200..700&family=Playball&display=swap');
 
@@ -236,6 +238,7 @@ p {
         <?php if (!$nome): ?>
             <form method="POST">
                 <input type="text" name="nome" placeholder="Introdu numele și prenumele tău." required>
+                <input type="text" name="telefono" placeholder="Introdu numărul tău de telefon." required>
                 <button type="submit">Introduceți</button>
                 <?php if (isset($errore)): ?>
                     <p class="errore"><?php echo $errore; ?></p>
@@ -249,6 +252,12 @@ p {
                 </form>
             <?php else: ?>
                 <p>Trebuie să te rogi pentru: <strong><?php echo htmlspecialchars($persona_assegnata); ?></strong></p>
+                <?php if (!empty($partecipanti[$persona_assegnata]['telefono'])): ?>
+    <a href="https://wa.me/<?php echo htmlspecialchars(formatTelefono($partecipanti[$persona_assegnata]['telefono'])); ?>" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #25D366; font-family: Oswald; color: black; text-decoration: none; border-radius: 5px; font-weight: bold;">
+        📩 Contactează tânărul pe WhatsApp
+    </a>
+<?php endif; ?>
+
             <?php endif; ?>
         <?php endif; ?>
     </div>

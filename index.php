@@ -233,6 +233,7 @@ p {
     </style>
 </head>
 <body>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <div class="overlay"></div>
     <div class="container">
         <?php if (!$nome): ?>
@@ -247,9 +248,13 @@ p {
         <?php else: ?>
             <?php if (!$persona_assegnata): ?>
                 <form method="POST">
-                    <p>Pace, <b><?php echo htmlspecialchars($_COOKIE['nome']); ?>!</b></p>
-                    <button type="submit" name="pesca" <?php echo $pescabile ? '' : 'disabled'; ?>>Descoperă persoana pentru care va trebui să te rogi</button>
-                </form>
+    <p>Pace, <b><?php echo htmlspecialchars($_COOKIE['nome']); ?>!</b></p>
+    <button type="submit" name="pesca" <?php echo $pescabile ? '' : 'disabled'; ?>>Descoperă persoana pentru care va trebui să te rogi</button>
+    <button type="button" onclick="location.reload();" style="background: none; border: none; cursor: pointer; font-size: 20px; color: #007bff; margin-top: 10px;">
+    <i class="fas fa-sync-alt"></i>
+    </button>
+</form>
+
             <?php else: ?>
                 <p>Trebuie să te rogi pentru: <strong><?php echo htmlspecialchars($persona_assegnata); ?></strong></p>
                 <?php if (!empty($partecipanti[$persona_assegnata]['telefono'])): ?>
@@ -262,4 +267,21 @@ p {
         <?php endif; ?>
     </div>
 </body>
+<script>
+    // Funzione per ricaricare la pagina alle 21:50
+    function checkTimeAndReload() {
+        const currentTime = new Date();
+        const hours = currentTime.getHours();
+        const minutes = currentTime.getMinutes();
+
+        if (hours === 21 && minutes === 50) {
+            location.reload(); // Ricarica la pagina
+        }
+    }
+
+    // Controlla ogni minuto se è ora di ricaricare
+    setInterval(checkTimeAndReload, 60000); // 60000 ms = 1 minuto
+</script>
+
+
 </html>
